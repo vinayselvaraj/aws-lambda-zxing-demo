@@ -1,9 +1,12 @@
 package zxingdemo;
 
+
+import java.util.List;
+
 public class QRCode {
     private int page;
     private String data;
-    private Point[] geometry;
+    private List<Point> geometry;
 
     public int getPage() {
         return page;
@@ -21,11 +24,17 @@ public class QRCode {
         this.data = data;
     }
 
-    public Point[] getGeometry() {
+    public List<Point> getGeometry() {
         return geometry;
     }
 
-    public void setGeometry(Point[] geometry) {
+    public void setGeometry(List<Point> geometry) {
         this.geometry = geometry;
+    }
+
+    public String toString() {
+        StringBuffer buff = new StringBuffer();
+        buff.append(String.format("[page=%d,data=%s,geometry=%s]", page, data, geometry));
+        return buff.toString();
     }
 }
