@@ -71,20 +71,20 @@ public class LambdaHandler implements RequestHandler<Map<String,String>, String>
         AmazonRekognition rekognitionClient = AmazonRekognitionClientBuilder.defaultClient();
 
         // Init executor services
-        ExecutorService rekognitionExecutor = Executors.newFixedThreadPool(1);
-        ExecutorService zxingExecutor = Executors.newFixedThreadPool(threadPoolSize);
+        ExecutorService executor = Executors.newFixedThreadPool(threadPoolSize);
 
         int pageCounter = 1;
 
         for(BufferedImage page : pages) {
 
-            // Send image to Amazon Rekognition
-            rekognitionExecutor.execute(new RekognitionDetector(rekognitionClient, deepCopyImage(page), response, pageCounter));
-
             // Parse QR codes
             for(int k=0; k<blurCount; k++) {
 
-                zxingExecutor.execute(new ZxingDecoder(deepCopyImage(page), response, pageCounter));
+                // Send image to Amazon Rekognition
+                executor.execute(new RekognitionDetector(rekognitionClient, deepCopyImage(page), response, pageCounter));
+
+                // Parse QR Codes
+                executor.execute(new ZxingDecoder(deepCopyImage(page), response, pageCounter));
 
                 float[] blurKernel = {1 / 9f, 1 / 9f, 1 / 9f, 1 / 9f, 1 / 9f, 1 / 9f, 1 / 9f, 1 / 9f, 1 / 9f};
                 BufferedImageOp blur = new ConvolveOp(new Kernel(3, 3, blurKernel));
@@ -94,11 +94,8 @@ public class LambdaHandler implements RequestHandler<Map<String,String>, String>
             pageCounter += 1;
         }
 
-        zxingExecutor.shutdown();
-        rekognitionExecutor.shutdown();
-
-        zxingExecutor.awaitTermination(15, TimeUnit.MINUTES);
-        rekognitionExecutor.awaitTermination(15, TimeUnit.MINUTES);
+        executor.shutdown();
+        executor.awaitTermination(15, TimeUnit.MINUTES);
 
     }
 
