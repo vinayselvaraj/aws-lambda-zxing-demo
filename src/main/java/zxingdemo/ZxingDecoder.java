@@ -15,22 +15,32 @@ public class ZxingDecoder implements Runnable {
     private BufferedImage image;
     private QRParserResponse response;
     private int page;
+    private int blur;
 
     private final int resizeCount = 5;
 
-    public ZxingDecoder(BufferedImage image, QRParserResponse response, int page) {
+    public ZxingDecoder(BufferedImage image, QRParserResponse response, int page, int blur) {
         this.image = image;
         this.response = response;
         this.page = page;
+        this.blur = blur;
     }
 
     @Override
     public void run() {
 
-        System.out.println("START Parsing page: " + page);
+        System.out.println(String.format("START Parsing page %d.  blur=%d", page, blur));
 
         for(int i=0; i<resizeCount; i++) {
             try {
+
+                if(i>0) {
+                    int newWidth = (int) (image.getWidth() * 0.9);
+                    int newHeight = (int) (image.getHeight() * 0.9);
+
+                    // Resize
+                    image = resize(image, newWidth, newHeight);
+                }
 
 
                 BinaryBitmap binaryBitmap = new BinaryBitmap(new HybridBinarizer(
@@ -54,21 +64,15 @@ public class ZxingDecoder implements Runnable {
                     }
                     code.setGeometry(points);
 
-                    System.out.println("Detected QR code in page: " + page);
+                    System.out.println(String.format("Detected QR code in page: %d (blur=%d, resize=%d)", page, blur, i));
                     response.addParseQRCode(code);
                 }
             } catch(NotFoundException nfe) {}
 
-            int newWidth = (int) (image.getWidth() * 0.9);
-            int newHeight = (int) (image.getHeight() * 0.9);
-
-            // Resize
-            image = resize(image, newWidth, newHeight);
-
         }
 
 
-        System.out.println("END Parsing page: " + page);
+        System.out.println(String.format("END Parsing page %d.  blur=%d", page, blur));
     }
 
     private BufferedImage resize(BufferedImage img, int newW, int newH) {

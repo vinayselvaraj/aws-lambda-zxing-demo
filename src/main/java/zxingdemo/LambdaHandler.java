@@ -39,6 +39,8 @@ public class LambdaHandler implements RequestHandler<Map<String,String>, String>
     private static final int blurCount = 5;
     private static final int threadPoolSize = 32;
 
+    private static final int pdfScanDPI = 1200;
+
     private static final boolean enableRekognition = false;
 
     /**
@@ -82,19 +84,19 @@ public class LambdaHandler implements RequestHandler<Map<String,String>, String>
             // Parse QR codes
             for(int k=0; k<blurCount; k++) {
 
+                if(k > 0) {
+                    float[] blurKernel = {1 / 9f, 1 / 9f, 1 / 9f, 1 / 9f, 1 / 9f, 1 / 9f, 1 / 9f, 1 / 9f, 1 / 9f};
+                    BufferedImageOp blur = new ConvolveOp(new Kernel(3, 3, blurKernel));
+                    page = blur.filter(page, null);
+                }
+
                 // Send image to Amazon Rekognition
                 if(enableRekognition) {
                     executor.execute(new RekognitionDetector(rekognitionClient, deepCopyImage(page), response, pageCounter));
                 }
 
                 // Parse QR Codes
-                executor.execute(new ZxingDecoder(deepCopyImage(page), response, pageCounter));
-
-                float[] blurKernel = {1 / 9f, 1 / 9f, 1 / 9f, 1 / 9f, 1 / 9f, 1 / 9f, 1 / 9f, 1 / 9f, 1 / 9f};
-                BufferedImageOp blur = new ConvolveOp(new Kernel(3, 3, blurKernel));
-                page = blur.filter(page, null);
-
-
+                executor.execute(new ZxingDecoder(deepCopyImage(page), response, pageCounter, k));
             }
 
             pageCounter += 1;
@@ -151,7 +153,8 @@ public class LambdaHandler implements RequestHandler<Map<String,String>, String>
 
             PDPageTree pageTree = document.getDocumentCatalog().getPages();
             for(int i=0; i < pageTree.getCount(); i++) {
-                BufferedImage img = renderer.renderImageWithDPI(i, 1200, ImageType.GRAY);
+                //BufferedImage img = renderer.renderImageWithDPI(i, pdfScanDPI, ImageType.GRAY);
+                BufferedImage img = renderer.renderImage(i, 8.0f);
                 images.add(img);
             }
             document.close();
