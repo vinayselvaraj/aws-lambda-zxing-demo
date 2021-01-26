@@ -39,6 +39,8 @@ public class LambdaHandler implements RequestHandler<Map<String,String>, String>
     private static final int blurCount = 5;
     private static final int threadPoolSize = 32;
 
+    private static final boolean enableRekognition = false;
+
     /**
      * Lambda handler
      *
@@ -81,7 +83,9 @@ public class LambdaHandler implements RequestHandler<Map<String,String>, String>
             for(int k=0; k<blurCount; k++) {
 
                 // Send image to Amazon Rekognition
-                executor.execute(new RekognitionDetector(rekognitionClient, deepCopyImage(page), response, pageCounter));
+                if(enableRekognition) {
+                    executor.execute(new RekognitionDetector(rekognitionClient, deepCopyImage(page), response, pageCounter));
+                }
 
                 // Parse QR Codes
                 executor.execute(new ZxingDecoder(deepCopyImage(page), response, pageCounter));
@@ -89,6 +93,8 @@ public class LambdaHandler implements RequestHandler<Map<String,String>, String>
                 float[] blurKernel = {1 / 9f, 1 / 9f, 1 / 9f, 1 / 9f, 1 / 9f, 1 / 9f, 1 / 9f, 1 / 9f, 1 / 9f};
                 BufferedImageOp blur = new ConvolveOp(new Kernel(3, 3, blurKernel));
                 page = blur.filter(page, null);
+
+
             }
 
             pageCounter += 1;

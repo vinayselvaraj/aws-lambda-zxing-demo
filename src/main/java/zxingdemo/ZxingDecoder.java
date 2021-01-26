@@ -5,14 +5,18 @@ import com.google.zxing.client.j2se.BufferedImageLuminanceSource;
 import com.google.zxing.common.HybridBinarizer;
 import com.google.zxing.multi.qrcode.QRCodeMultiReader;
 
+import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.util.*;
+import java.util.List;
 
 public class ZxingDecoder implements Runnable {
 
     private BufferedImage image;
     private QRParserResponse response;
     private int page;
+
+    private final int resizeCount = 5;
 
     public ZxingDecoder(BufferedImage image, QRParserResponse response, int page) {
         this.image = image;
@@ -25,35 +29,59 @@ public class ZxingDecoder implements Runnable {
 
         System.out.println("START Parsing page: " + page);
 
-        try {
-            BinaryBitmap binaryBitmap = new BinaryBitmap(new HybridBinarizer(
-                    new BufferedImageLuminanceSource(image)));
-            QRCodeMultiReader barcodeReader = new QRCodeMultiReader();
-            Result[] qrCodeResults = barcodeReader.decodeMultiple(binaryBitmap, buildHints());
+        for(int i=0; i<resizeCount; i++) {
+            try {
 
-            for (Result qrCodeResult : qrCodeResults) {
 
-                QRCode code = new QRCode();
-                code.setPage(page);
-                code.setData(qrCodeResult.getText());
+                BinaryBitmap binaryBitmap = new BinaryBitmap(new HybridBinarizer(
+                        new BufferedImageLuminanceSource(image)));
+                QRCodeMultiReader barcodeReader = new QRCodeMultiReader();
+                Result[] qrCodeResults = barcodeReader.decodeMultiple(binaryBitmap, buildHints());
 
-                List<Point> points = new ArrayList<>();
-                ResultPoint[] resultPoints = qrCodeResult.getResultPoints();
-                for (ResultPoint resultPoint : resultPoints) {
-                    Point point = new Point();
-                    point.setX(resultPoint.getX());
-                    point.setY(resultPoint.getY());
-                    points.add(point);
+                for (Result qrCodeResult : qrCodeResults) {
+
+                    QRCode code = new QRCode();
+                    code.setPage(page);
+                    code.setData(qrCodeResult.getText());
+
+                    List<Point> points = new ArrayList<>();
+                    ResultPoint[] resultPoints = qrCodeResult.getResultPoints();
+                    for (ResultPoint resultPoint : resultPoints) {
+                        Point point = new Point();
+                        point.setX(resultPoint.getX());
+                        point.setY(resultPoint.getY());
+                        points.add(point);
+                    }
+                    code.setGeometry(points);
+
+                    System.out.println("Detected QR code in page: " + page);
+                    response.addParseQRCode(code);
                 }
-                code.setGeometry(points);
+            } catch(NotFoundException nfe) {}
 
-                System.out.println("Detected QR code in page: " + page);
-                response.addParseQRCode(code);
-            }
-        } catch(NotFoundException nfe) {}
+            int newWidth = (int) (image.getWidth() * 0.9);
+            int newHeight = (int) (image.getHeight() * 0.9);
+
+            // Resize
+            image = resize(image, newWidth, newHeight);
+
+        }
+
 
         System.out.println("END Parsing page: " + page);
     }
+
+    private BufferedImage resize(BufferedImage img, int newW, int newH) {
+        Image tmp = img.getScaledInstance(newW, newH, Image.SCALE_SMOOTH);
+        BufferedImage dimg = new BufferedImage(newW, newH, BufferedImage.TYPE_INT_ARGB);
+
+        Graphics2D g2d = dimg.createGraphics();
+        g2d.drawImage(tmp, 0, 0, null);
+        g2d.dispose();
+
+        return dimg;
+    }
+
 
     /**
      * Builds hints for Zxing
