@@ -1,4 +1,4 @@
-package zxingdemo;
+package hpaip;
 
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
@@ -37,7 +37,7 @@ public class LambdaHandler implements RequestHandler<Map<String,String>, String>
     private static final int blurCount = 5;
     private static final int resizeCount = 5;
 
-    private static final int threadPoolSize = 8;
+    private static final int threadPoolSize = 64;
 
     private static final int pdfScanDPI = 1200;
 
@@ -203,7 +203,15 @@ public class LambdaHandler implements RequestHandler<Map<String,String>, String>
             code = response.getParsedQRCodes().get(0); // Get the first result
         }
 
-        System.out.println(new Gson().toJson(code));
+        System.out.println("\n\nRESULT:\n\n\n");
+
+        Gson gson = new GsonBuilder().setPrettyPrinting().create();
+
+        if(code == null) {
+            System.out.println("{}");
+        } else {
+            System.out.println(gson.toJson(code));
+        }
 
     }
 }

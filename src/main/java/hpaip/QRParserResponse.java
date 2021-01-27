@@ -1,4 +1,4 @@
-package zxingdemo;
+package hpaip;
 
 import java.util.ArrayList;
 import java.util.Collections;

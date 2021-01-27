@@ -1,4 +1,4 @@
-package zxingdemo;
+package hpaip;
 
 import com.google.gson.Gson;
 import com.google.zxing.*;
@@ -33,7 +33,12 @@ public class ZxingDecoder implements Runnable {
     @Override
     public void run() {
 
-        System.out.println(String.format("START Parsing page %d.  blur=%d", page, blur));
+        // Exit if at least one QR code was parsed.
+        if(response.getParsedQRCodes().size() > 0) {
+            return;
+        }
+
+        System.out.println(String.format("START Decoding page=%d blur=%d resize=%d threadId=%s", page, blur, resize, Thread.currentThread().getId()));
         Gson gson = new Gson();
 
         try {
@@ -110,8 +115,7 @@ public class ZxingDecoder implements Runnable {
         } catch(NotFoundException nfe) {}
 
 
-
-        System.out.println(String.format("END Parsing page %d.  blur=%d resize=%d", page, blur, resize));
+        System.out.println(String.format("END Decoding page=%d blur=%d resize=%d threadId=%s", page, blur, resize, Thread.currentThread().getId()));
     }
 
     /**

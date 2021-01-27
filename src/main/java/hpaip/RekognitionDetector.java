@@ -1,4 +1,4 @@
-package zxingdemo;
+package hpaip;
 
 import com.amazonaws.services.rekognition.AmazonRekognition;
 import com.amazonaws.services.rekognition.model.*;

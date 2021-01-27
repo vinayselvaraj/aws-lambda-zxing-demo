@@ -1,4 +1,4 @@
-package zxingdemo;
+package hpaip;
 
 public class Point {
     float x;
