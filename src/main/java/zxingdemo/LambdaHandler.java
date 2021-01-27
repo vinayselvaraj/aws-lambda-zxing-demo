@@ -8,7 +8,6 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPageTree;
-import org.apache.pdfbox.rendering.ImageType;
 import org.apache.pdfbox.rendering.PDFRenderer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -175,6 +174,16 @@ public class LambdaHandler implements RequestHandler<Map<String,String>, String>
 
         LambdaHandler handler = new LambdaHandler();
         handler.processInputFile(new File(args[0]), response);
+
+        Base64.Decoder decoder = Base64.getDecoder();
+
+        for(QRCode code : response.getParsedQRCodes()) {
+            String[]  splitSignedText = code.getData().split("\\.");
+            String decodedSigned = new String(decoder.decode(splitSignedText[0]));
+            decodedSigned = decodedSigned +"\n Content:"+(new String(decoder.decode(splitSignedText[1])));
+            decodedSigned.replaceAll("\\\"", "\"");
+            System.out.println("\nDecoded Text:" + decodedSigned);
+        }
 
         System.out.println(response);
     }
