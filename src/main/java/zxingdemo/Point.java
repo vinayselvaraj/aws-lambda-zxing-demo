@@ -19,4 +19,8 @@ public class Point {
     public void setY(float y) {
         this.y = y;
     }
+
+    public String toString() {
+        return String.format("(x=%f, y=%f)", x, y);
+    }
 }

@@ -2,10 +2,12 @@ package zxingdemo;
 
 
 import java.util.List;
+import java.util.Map;
 
-public class QRCode {
+public class GSTQRCode {
     private int page;
-    private String data;
+    private Map<String, String> decodedSigned;
+    private Map<String, String> data;
     private List<Point> geometry;
 
     public int getPage() {
@@ -16,11 +18,19 @@ public class QRCode {
         this.page = page;
     }
 
-    public String getData() {
+    public Map<String, String> getDecodedSigned() {
+        return decodedSigned;
+    }
+
+    public void setDecodedSigned(Map<String, String> decodedSigned) {
+        this.decodedSigned = decodedSigned;
+    }
+
+    public Map<String, String> getData() {
         return data;
     }
 
-    public void setData(String data) {
+    public void setData(Map<String, String> data) {
         this.data = data;
     }
 

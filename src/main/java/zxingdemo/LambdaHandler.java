@@ -23,7 +23,6 @@ import java.util.*;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 
 public class LambdaHandler implements RequestHandler<Map<String,String>, String> {
 
@@ -36,7 +35,9 @@ public class LambdaHandler implements RequestHandler<Map<String,String>, String>
     private static final String TIFF_TYPE = "image/tiff";
 
     private static final int blurCount = 5;
-    private static final int threadPoolSize = 32;
+    private static final int resizeCount = 5;
+
+    private static final int threadPoolSize = 8;
 
     private static final int pdfScanDPI = 1200;
 
@@ -80,31 +81,49 @@ public class LambdaHandler implements RequestHandler<Map<String,String>, String>
 
         for(BufferedImage page : pages) {
 
+            if(executor.isShutdown()) {
+                break;
+            }
+
             // Parse QR codes
             for(int k=0; k<blurCount; k++) {
-
-                if(k > 0) {
-                    float[] blurKernel = {1 / 9f, 1 / 9f, 1 / 9f, 1 / 9f, 1 / 9f, 1 / 9f, 1 / 9f, 1 / 9f, 1 / 9f};
-                    BufferedImageOp blur = new ConvolveOp(new Kernel(3, 3, blurKernel));
-                    page = blur.filter(page, null);
-                }
 
                 // Send image to Amazon Rekognition
                 if(enableRekognition) {
                     executor.execute(new RekognitionDetector(rekognitionClient, deepCopyImage(page), response, pageCounter));
                 }
 
-                // Parse QR Codes
-                executor.execute(new ZxingDecoder(deepCopyImage(page), response, pageCounter, k));
+                BufferedImage pageResize = deepCopyImage(page);
+
+                for(int i=0; i<resizeCount; i++) {
+
+                    // Parse QR Codes
+                    executor.execute(new ZxingDecoder(deepCopyImage(pageResize), response, pageCounter, k, i));
+                }
             }
 
             pageCounter += 1;
         }
 
         executor.shutdown();
-        executor.awaitTermination(15, TimeUnit.MINUTES);
+
+
+        while(true) {
+            if(executor.isTerminated()) {
+                break;
+            }
+
+            if(response.getParsedQRCodes().size() > 0) {
+                System.out.println("Found GST QR Code...");
+                executor.shutdownNow();
+            }
+
+            Thread.sleep(1000);
+        }
 
     }
+
+
 
     /**
      * Creates a copy of a BufferedImage
@@ -154,6 +173,7 @@ public class LambdaHandler implements RequestHandler<Map<String,String>, String>
             for(int i=0; i < pageTree.getCount(); i++) {
                 //BufferedImage img = renderer.renderImageWithDPI(i, pdfScanDPI, ImageType.GRAY);
                 BufferedImage img = renderer.renderImage(i, 8.0f);
+                //BufferedImage img = renderer.renderImage(i);
                 images.add(img);
             }
             document.close();
@@ -165,6 +185,7 @@ public class LambdaHandler implements RequestHandler<Map<String,String>, String>
 
 
     public static void main(String[] args) throws IOException, InterruptedException {
+
         if (args.length == 0) {
             System.err.println("SYNTAX: LambdaHandler <input file>");
             System.exit(1);
@@ -177,14 +198,12 @@ public class LambdaHandler implements RequestHandler<Map<String,String>, String>
 
         Base64.Decoder decoder = Base64.getDecoder();
 
-        for(QRCode code : response.getParsedQRCodes()) {
-            String[]  splitSignedText = code.getData().split("\\.");
-            String decodedSigned = new String(decoder.decode(splitSignedText[0]));
-            decodedSigned = decodedSigned +"\n Content:"+(new String(decoder.decode(splitSignedText[1])));
-            decodedSigned.replaceAll("\\\"", "\"");
-            System.out.println("\nDecoded Text:" + decodedSigned);
+        GSTQRCode code = null;
+        if(response.getParsedQRCodes().size() > 0) {
+            code = response.getParsedQRCodes().get(0); // Get the first result
         }
 
-        System.out.println(response);
+        System.out.println(new Gson().toJson(code));
+
     }
 }

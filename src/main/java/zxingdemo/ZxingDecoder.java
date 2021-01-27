@@ -1,5 +1,6 @@
 package zxingdemo;
 
+import com.google.gson.Gson;
 import com.google.zxing.*;
 import com.google.zxing.client.j2se.BufferedImageLuminanceSource;
 import com.google.zxing.common.HybridBinarizer;
@@ -7,6 +8,9 @@ import com.google.zxing.multi.qrcode.QRCodeMultiReader;
 
 import java.awt.*;
 import java.awt.image.BufferedImage;
+import java.awt.image.BufferedImageOp;
+import java.awt.image.ConvolveOp;
+import java.awt.image.Kernel;
 import java.util.*;
 import java.util.List;
 
@@ -16,68 +20,111 @@ public class ZxingDecoder implements Runnable {
     private QRParserResponse response;
     private int page;
     private int blur;
+    private int resize;
 
-    private final int resizeCount = 5;
-
-    public ZxingDecoder(BufferedImage image, QRParserResponse response, int page, int blur) {
+    public ZxingDecoder(BufferedImage image, QRParserResponse response, int page, int blur, int resize) {
         this.image = image;
         this.response = response;
         this.page = page;
         this.blur = blur;
+        this.resize = resize;
     }
 
     @Override
     public void run() {
 
         System.out.println(String.format("START Parsing page %d.  blur=%d", page, blur));
+        Gson gson = new Gson();
 
-        for(int i=0; i<resizeCount; i++) {
-            try {
+        try {
 
-                if(i>0) {
+            if(blur > 0) {
+                for(int i=0; i<blur; i++) {
+                    float[] blurKernel = {1 / 9f, 1 / 9f, 1 / 9f, 1 / 9f, 1 / 9f, 1 / 9f, 1 / 9f, 1 / 9f, 1 / 9f};
+                    BufferedImageOp blur = new ConvolveOp(new Kernel(3, 3, blurKernel));
+                    image = blur.filter(image, null);
+                }
+            }
+
+            if(resize > 0) {
+                for(int i=0; i<resize; i++) {
                     int newWidth = (int) (image.getWidth() * 0.9);
                     int newHeight = (int) (image.getHeight() * 0.9);
 
                     // Resize
                     image = resize(image, newWidth, newHeight);
                 }
+            }
 
+            BinaryBitmap binaryBitmap = new BinaryBitmap(new HybridBinarizer(
+                    new BufferedImageLuminanceSource(image)));
+            QRCodeMultiReader barcodeReader = new QRCodeMultiReader();
+            Result[] qrCodeResults = barcodeReader.decodeMultiple(binaryBitmap, buildHints());
 
-                BinaryBitmap binaryBitmap = new BinaryBitmap(new HybridBinarizer(
-                        new BufferedImageLuminanceSource(image)));
-                QRCodeMultiReader barcodeReader = new QRCodeMultiReader();
-                Result[] qrCodeResults = barcodeReader.decodeMultiple(binaryBitmap, buildHints());
+            Base64.Decoder b64Decoder = Base64.getDecoder();
 
-                for (Result qrCodeResult : qrCodeResults) {
+            // Search for GST Signed QR Codes
+            for (Result qrCodeResult : qrCodeResults) {
 
-                    QRCode code = new QRCode();
-                    code.setPage(page);
-                    code.setData(qrCodeResult.getText());
+                String data = qrCodeResult.getText();
 
-                    List<Point> points = new ArrayList<>();
-                    ResultPoint[] resultPoints = qrCodeResult.getResultPoints();
-                    for (ResultPoint resultPoint : resultPoints) {
-                        Point point = new Point();
-                        point.setX(resultPoint.getX());
-                        point.setY(resultPoint.getY());
-                        points.add(point);
-                    }
-                    code.setGeometry(points);
-
-                    System.out.println(String.format("Detected QR code in page: %d (blur=%d, resize=%d)", page, blur, i));
-                    response.addParseQRCode(code);
+                String[] splitData = data.split("\\.");
+                if(splitData.length != 3) {
+                    continue;
                 }
-            } catch(NotFoundException nfe) {}
 
-        }
+                String decodedSigned = null;
+                String content = null;
+
+                try {
+                    decodedSigned = new String(b64Decoder.decode(splitData[0]));
+                    content = new String(b64Decoder.decode(splitData[1]));
+                    if(!content.contains("Irn")) {
+                        // Skipping since key field was not found
+                        continue;
+                    }
+                } catch(IllegalArgumentException iae) {
+                    iae.printStackTrace();
+                    // Unable to do base64 decoding
+                }
+
+                GSTQRCode code = new GSTQRCode();
+                code.setPage(page);
+                code.setDecodedSigned(gson.fromJson(decodedSigned, Map.class));
+                Map<String, String> contentMap = gson.fromJson(content, Map.class);
+                code.setData(gson.fromJson(contentMap.get("data"), Map.class));
+
+                List<Point> points = new ArrayList<>();
+                ResultPoint[] resultPoints = qrCodeResult.getResultPoints();
+                for (ResultPoint resultPoint : resultPoints) {
+                    Point point = new Point();
+                    point.setX(resultPoint.getX());
+                    point.setY(resultPoint.getY());
+                    points.add(point);
+                }
+                code.setGeometry(points);
+
+                System.out.println(String.format("Detected QR code in page: %d (blur=%d, resize=%d)", page, blur, resize));
+                response.addParseQRCode(code);
+            }
+        } catch(NotFoundException nfe) {}
 
 
-        System.out.println(String.format("END Parsing page %d.  blur=%d", page, blur));
+
+        System.out.println(String.format("END Parsing page %d.  blur=%d resize=%d", page, blur, resize));
     }
 
+    /**
+     * Resize image
+     *
+     * @param img Image to resize
+     * @param newW new width
+     * @param newH new height
+     * @return Resized image
+     */
     private BufferedImage resize(BufferedImage img, int newW, int newH) {
         Image tmp = img.getScaledInstance(newW, newH, Image.SCALE_SMOOTH);
-        BufferedImage dimg = new BufferedImage(newW, newH, BufferedImage.TYPE_INT_ARGB);
+        BufferedImage dimg = new BufferedImage(newW, newH, img.getType());
 
         Graphics2D g2d = dimg.createGraphics();
         g2d.drawImage(tmp, 0, 0, null);
